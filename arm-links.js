@@ -1,5 +1,5 @@
 javascript:
-var debug = true;
+var debug = false;
 var ArmLinks = {
 
 	debugMessage: function(message) {
@@ -47,12 +47,49 @@ var ArmLinks = {
 				link.parentNode.insertBefore(del, link.nextSibling);
 			}
 			try {
-				var deleting = null, total = deleted = 0, canDelete = false;
+				var deleting = null, total = deleted = 0, canDelete = false, req;
+
+				function deletePosts() {
+					var id = deleting.shift();
+					if (!id) {
+						del.innerHTML += " (DONE)";
+						return;
+					}
+					req = {
+						method: "GET",
+						url: "/posting.php?mode=delete&" + id
+					};
+					var deleteRequest = new XMLHttpRequest();
+					deleteRequest.open(req.method, req.url, false);
+					deleteRequest.send();
+					try {
+						req = ArmLinks.form2xhr(deleteRequest.responseText);
+						var deleteConfirmRequest = new XMLHttpRequest();
+						deleteConfirmRequest.open(req.method, req.url, false);
+						deleteConfirmRequest.setRequestHeader('Content-type', req.headers['Content-type']);
+						deleteConfirmRequest.setRequestHeader('Content-length', req.data.length);
+						deleteConfirmRequest.setRequestHeader('Connection', 'close');
+						deleteConfirmRequest.send(req.data);
+						if (/successf/.test(deleteConfirmRequest.responseText)) {
+							del.innerHTML = " Deleted posts " + ((++deleted) + "/" + total);
+						} else {
+							ArmLinks.debugMessage("Could not delete; response was "+deleteConfirmRequest.responseText);
+						}
+
+						deletePosts();
+					} catch(e) {
+						alert(e + "\n" + req.url + "\n" + deleteRequest.responseText.replace(/[\s\S]*<body>|<[^>]+>/g, ''));
+					}
+				}
 
 				/* retrieve posts */
+				req = {
+					method: "GET",
+					url: "/search.php?author_id=" + uid + "&sr=posts"
+				};
 				var getPostsRequest = new XMLHttpRequest();
 				ArmLinks.debugMessage("Search URL is /search.php?author_id=" + uid + "&sr=posts");
-				getPostsRequest.open("GET", "/search.php?author_id=" + uid + "&sr=posts", false);
+				getPostsRequest.open(req.method, req.url, false);
 				getPostsRequest.send();
 				if (getPostsRequest.responseText.match(/\bf=\d+.*\bp=(\d+)#p\1/g)) {
 					deleting = getPostsRequest.responseText.match(/\bf=\d+.*\bp=(\d+)#p\1/g)
@@ -63,34 +100,40 @@ var ArmLinks = {
 						if (pos > -1 && pos < j) deleting.splice(j, 1);
 					}
 					total = deleting.length;
-					if (canDelete) deletePosts();
+					deletePosts();
 				} else {
 					ArmLinks.debugMessage("No posts found to delete");
 				}
 
 				/* request ban */
-				var req = {
+				req = {
 					method:"POST",
 					url: "/mcp.php?i=ban&mode=user&u=" + uid,
-					headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+					headers: { 'Content-type': 'application/x-www-form-urlencoded' },
 					data: "ban=" + userName + "&banlength=0&banlengthother=&banreason=spam&bangivereason=&banexclude=0&bansubmit=Submit",
 				};
-				var xmlHttpRequest = new XMLHttpRequest();
-				ArmLinks.debugMessage("Ban request URL is "+req.url);
-				xmlHttpRequest.open(req.method, req.url, false);
-				xmlHttpRequest.setRequestHeader('Content-Type', req.headers['Content-Type']);
-				xmlHttpRequest.send(req.data);
-				ArmLinks.debugMessage("Ban request result was "+xmlHttpRequest.responseText);
+				var banRequest = new XMLHttpRequest();
+				ArmLinks.debugMessage("Ban request URL is "+req.url+" with content type "+req.headers['Content-type']);
+				banRequest.open(req.method, req.url, false);
+				banRequest.setRequestHeader('Content-type', req.headers['Content-type']);
+				banRequest.setRequestHeader('Content-length', req.data.length);
+				banRequest.setRequestHeader('Connection', 'close');
+				banRequest.send(req.data);
+				ArmLinks.debugMessage("Ban request result was "+banRequest.responseText);
 				try {
 					/* confirm ban */
-					req = ArmLinks.form2xhr(xmlHttpRequest.responseText);
-					ArmLinks.debugMessage("Ban confirm URL is "+req.url+" with body "+req.data);
-					xmlHttpRequest.open(req.method, req.url, false);
-					xmlHttpRequest.send(req.data);
-					if (/banlist.*updated.*success/.test(xmlHttpRequest.responseText)) {
+					req = ArmLinks.form2xhr(banRequest.responseText);
+					var banConfirmRequest = new XMLHttpRequest();
+					ArmLinks.debugMessage("Ban confirm URL is "+req.url+", body "+req.data+", content type "+req.headers['Content-type']);
+					banConfirmRequest.open(req.method, req.url, false);
+					banConfirmRequest.setRequestHeader('Content-type', req.headers['Content-type']);
+					banConfirmRequest.setRequestHeader('Content-length', req.data.length);
+					banConfirmRequest.setRequestHeader('Connection', 'close');
+					banConfirmRequest.send(req.data);
+					if (/banlist.*updated.*success/.test(banConfirmRequest.responseText)) {
 						link.innerHTML = "BANNED";
 					} else {
-						ArmLinks.debugMessage("Couldn't ban; result page was "+xmlHttpRequest.responseText);
+						ArmLinks.debugMessage("Couldn't ban; result page was "+banConfirmRequest.responseText);
 						link.innerHTML = "ERROR";
 					}
 					canDelete = true;
@@ -99,28 +142,6 @@ var ArmLinks = {
 					ArmLinks.debugMessage("Ban attempt threw exception: "+e);
 					link.innerHTML = "ERROR";
 					canDelete = true;
-				}
-
-				function deletePosts() {
-					var id = deleting.shift();
-					if (!id) {
-						del.innerHTML += " (DONE)";
-						return;
-					}
-					var xmlHttpRequest = new XMLHttpRequest();
-					xmlHttpRequest.open("GET", "/posting.php?mode=delete&" + id);
-					xmlHttpRequest.send();
-					try {
-						var req = ArmLinks.form2xhr(xmlHttpRequest.responseText);
-						xmlHttpRequest.open(req.method, req.url, false);
-						xmlHttpRequest.send(req.data);
-						if (/successf/.test(xmlHttpRequest.responseText))
-							del.innerHTML = " Deleted posts " + ((++deleted) + "/" + total);
-
-						deletePosts();
-					} catch(e) {
-						alert(e + "\n" + req.url + "\n" + xmlHttpRequest.responseText.replace(/[\s\S]*<body>|<[^>]+>/g, ''));
-					}
 				}
 
 			} catch(e) { alert(e) }
