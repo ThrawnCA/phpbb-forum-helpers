@@ -8,12 +8,30 @@ var ArmLinks = {
 		}
 	},
 
+	isBanLink: function(href) {
+		return /\bi=ban\b.*\bu=\d+/.test(href);
+	},
+
+	isMemberProfileLink: function(href) {
+		return /memberlist\.php\?mode=viewprofile/.test(href);
+	},
+
 	init: function() {
 		var allLinks = document.getElementsByTagName("a");
 		for (var i = 0; i < allLinks.length; i++) {
-			if (/\bi=ban\b.*\bu=\d+/.test(allLinks[i].href)) {
+			if (ArmLinks.isBanLink(allLinks[i].href)) {
 				ArmLinks.debugMessage("Adding onclick event to "+allLinks[i].innerHTML);
 				allLinks[i].onclick = ArmLinks.onclick;
+			} else if (ArmLinks.isMemberProfileLink(allLinks[i].href)) {
+				userId = allLinks[i].href.match(/\bu=\d+/)[0].match(/\d+/);
+				banLink = document.createElement("a");
+				banLink.href = "/mcp.php?i=ban&mode=user&u="+userId+"&bk_username="+allLinks[i].innerHTML;
+				banLink.id = "ban"+userId;
+				banLink.name = "ban"+userId;
+				banLink.innerHTML = " [Hammer!]";
+				allLinks[i].parentNode.insertBefore(banLink, allLinks[i].nextSibling);
+
+				banLink.onclick = ArmLinks.onclick;
 			}
 		}
 	},
@@ -37,7 +55,12 @@ var ArmLinks = {
 			ev.preventDefault();
 			var link = ev.target;
 			var uid = link.href.match(/\bu=(\d+)/)[1];
-			var userName = link.parentNode.getElementsByTagName("span")[0].textContent;
+			var userName;
+			if (/\bbk_username=/.test(ev.target.href)) {
+				userName = ev.target.href.match(/\bbk_username=([^&]+)/)[1];
+			} else {
+				userName = link.parentNode.getElementsByTagName("span")[0].textContent;
+			}
 			ArmLinks.debugMessage("uid ["+uid+"], userName ["+userName+"]");
 			link.innerHTML = "...";
 			var del = document.getElementById("del-posts");
